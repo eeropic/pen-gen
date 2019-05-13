@@ -1,47 +1,223 @@
-<!DOCTYPE html>
-<html manifest="cache.manifest">
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="apple-touch-fullscreen" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="PenToolTool" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="viewport" content="initial-scale=1.0, width=device-width, maximum-scale=1, user-scalable=0"/>
+<!doctype html>
+<html>
+<head>
+  <title>Dropbox JavaScript SDK</title>
+  <link rel="stylesheet" href="css/fontawesome-5-all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@7/dist/polyfill.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/2.0.3/fetch.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.0/paper-full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="lib/Dropbox-sdk.min.js"></script>
+  <script src="lib/utils.js"></script>
+</head>
+<body>
 
-    <title>Pen Tool Tool3</title>
-    <link rel="stylesheet" href="css/fontawesome-5-all.min.css" />
-    <link rel="stylesheet" href="css/style.css" />
-  </head>
 
-  <body>
-    <div id="app">
-      <canvas id="canvas" resize keepalive="true"></canvas>
-      <div id="textInput"><input type="text" id="textInputField" value="Hello!"></div>
-      <div id="gui-top">
-        <div id="undo" class="fas fa-undo block"></div>
-        <div id="redo" class="fas fa-redo block"></div>
-        <div id="clear-canvas" class="fas fa-trash block"></div>
-      </div>
-      <div id="gui">
-        <div class="command-rows">
-          <ol id="commands" data-title="&#xf304;" class="commands blocks sortable"></ol>
-          <!--<i class="fas fa-remove"></i>-->
-        </div>
-        <div class="component-columns">
-          <ol id="components" data-title="&#xf1b3;" class="components blocks sortable"></ol>
-        </div>
-      </div>
+<div id="app">
+		<canvas id="canvas" resize="" keepalive="true" width="2504" height="2000" style="-webkit-user-drag: none; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></canvas>
+		<div id="gui-top">
+			<a href="" id="authlink" class="button">Login to Dropbox</a>
+			<div id="undo" class="fas fa-undo block"></div>
+			<div id="redo" class="fas fa-redo block"></div>
+			<div id="clear-canvas" class="fas fa-trash block"></div>
+		</div>
+</div>
 
-      <div class="color-gui">
-          <ol id="colors" data-title="&#xf53f;" class="colors blocks-vertical"></ol>
-      </div>
-      
-    </div>
-    <script src="lib/paper-full.min.js"></script>
-    <script src="lib/jquery.min.js"></script>
-    <script src="lib/jquery-sortable-min.js"></script>
-    <script src="js/commands.js"></script>
-    <script src="js/index.js"></script>
-  </body>
+
+  <script>
+    var CLIENT_ID = 'zur0pmjfpxq68d5';
+
+    function getAccessTokenFromUrl() {
+     return utils.parseQueryString(window.location.hash).access_token;
+    }
+
+    function isAuthenticated() {
+      return !!getAccessTokenFromUrl();
+    }
+
+    if (isAuthenticated()) {
+      var dbx = new Dropbox({ accessToken: getAccessTokenFromUrl() });
+      dbx.filesListFolder({path: '/pen-gen/'})
+        .then(function(response) {
+          console.log(response.entries)
+        })
+        .catch(function(error) {
+          console.error(error);
+        })
+      document.getElementById('authlink').innerHTML="Logged in to Dropbox"
+      document.getElementById('authlink').classList.add('logged')
+    } else {
+      var dbx = new Dropbox({ clientId: CLIENT_ID });
+      var authUrl = dbx.getAuthenticationUrl('https://eerojohannes.com/pengen/');
+      document.getElementById('authlink').href = authUrl;
+    }
+    
+  </script>
+  
+  <script>
+		paper.install(window)
+		paper.setup("canvas")
+
+var tools = [new Tool()]
+
+Item.prototype.subDivide=function(){
+    let len=this.segments.length;
+    for(var i=len-1;i>=0;i--){
+        this.segments[i].curve.divideAtTime(0.5)
+    }
+}
+
+tools[0].on({
+    mousedown(e){
+        this.path=new Path({
+            strokeColor:"#000",
+            strokeJoin:"round",
+            strokeCap:"round",
+            strokeWidth:12
+            
+        })
+    },
+    mousedrag(e){
+        this.path.add(e.point)
+    },
+    mouseup(e){
+        this.path.simplify()
+        this.path.subDivide()
+        this.path.data.pathData=this.path.pathData
+
+        this.path.onFrame=function(event){
+            if(event.count%5==0){
+                let pos=(event.count/200)%1
+                this.pathData=this.data.pathData
+                this.position=[this.bounds.width/2,0]
+                distortAlongPath(distortPath,this, pos)
+            }
+        }
+    }
+})
+
+let distortPath=new Path({
+    strokeColor:"blue",
+    segments:[
+        [-200,-200],[200,200],[400,0],[200,-200],[-200,200],[-400,0]
+    ],
+    closed:true,
+    strokeWidth:2,
+    selected:true
+})
+
+distortPath.smooth()
+distortPath.position=project.view.viewSize/2
+
+console.log(distortPath)
+
+function distortAlongPath(distortPath, sourcePath, offset){
+console.log(distortPath,sourcePath)
+    let cloneWidth=sourcePath.bounds.width
+    for(let seg of sourcePath.segments){
+        let normalizedX=seg.point.x/cloneWidth
+        let normalizedInX=(seg.handleIn.x+seg.point.x)/cloneWidth
+        let normalizedOutX=(seg.handleOut.x+seg.point.x)/cloneWidth
+        let normX=(normalizedX*cloneWidth+(offset*distortPath.length))%distortPath.length
+        let normInX=(normalizedInX*cloneWidth+(offset*distortPath.length))%distortPath.length
+        let normOutX=(normalizedOutX*cloneWidth+(offset*distortPath.length))%distortPath.length
+        let normalAtPos=distortPath.getNormalAt(normX)
+        let normalInAtPos=distortPath.getNormalAt(normInX)
+        let normalOutAtPos=distortPath.getNormalAt(normOutX)
+        let inY=seg.handleIn.y+seg.point.y
+        let outY=seg.handleOut.y+seg.point.y
+        seg.point=distortPath.getPointAt(normX).add(normalAtPos).multiply(-seg.point.y)
+        seg.handleIn=distortPath.getPointAt(normInX).add(normalInAtPos.multiply(-inY)).subtract(seg.point)
+        seg.handleOut=distortPath.getPointAt(normOutX).add(normalOutAtPos.multiply(-outY)).subtract(seg.point)
+    }
+}
+
+
+
+
+/*
+		var drawingData = localStorage.getItem("touchProto")
+		var textData = localStorage.getItem("touchText")
+		var commandsData = localStorage.getItem("touchCommands")
+
+		if (drawingData != null) {
+			project.clear()
+			project.importJSON(JSON.parse(drawingData))
+		}
+*/
+		document.body.addEventListener("touchstart", null, { passive: false })
+		document.body.addEventListener("touchmove", null, { passive: false })
+		document.body.addEventListener("touchend", null, { passive: false })
+
+		$("#gui, #components, #commands, #colors").on("touchstart touchmove", function(e) {
+			e.preventDefault()
+		})
+
+		$("#textInputField, #gui-top, #undo, #redo, #clear").on("touchmove", function(e) {
+			e.preventDefault()
+		})
+
+		var globalColors = ["#303240", "#0033dd", "#ff83b4", "#ffbb44", "#66dddd"]
+		globalColors.forEach(function(val, idx) {
+			document.documentElement.style.setProperty("--color-" + (idx + 1), val)
+		})
+
+
+
+		function updateUndoButtons(tool) {
+			$("#undo").css("opacity", tool.history.index > 0 && tool.history.projects.length > 0 ? 1 : 0.5)
+			$("#redo").css("opacity", tool.history.index < tool.history.projects.length - 1 ? 1 : 0.5)
+		}
+
+		function handleUndoHistory(tool) {
+			tool.history.projects.push(project.exportJSON(false))
+			tool.history.index = Math.min(tool.history.index + 1, tool.history.projects.length - 1)
+			if (tool.history.projects.length > 0 && tool.history.index < Math.max(0, tool.history.projects.length - 1)) {
+				tool.history.projects.length = Math.max(1, tool.history.index)
+				tool.history.projects.push(project.exportJSON(false))
+				tool.history.index = tool.history.projects.length - 1
+			} else if (tool.history.projects.length > tool.maxUndoLevels) {
+				tool.history.projects.shift()
+				tool.history.index = Math.max(0, tool.history.index - 1)
+			}
+		}
+
+
+		$("#clear-canvas").click(function() {
+			project.clear()
+			handleUndoHistory(penTool)
+			updateUndoButtons(penTool)
+		})
+
+		$("#undo").click(function() {
+			penTool.history.index = Math.max(0, penTool.history.index - 1)
+			project.clear()
+			project.importJSON(penTool.history.projects[penTool.history.index])
+			//logHistory()
+			updateUndoButtons(penTool)
+		})
+
+		$("#redo").click(function() {
+			penTool.history.index = Math.max(0, Math.min(penTool.history.projects.length - 1, penTool.history.index + 1))
+			project.clear()
+			project.importJSON(penTool.history.projects[penTool.history.index])
+			//logHistory()
+			updateUndoButtons(penTool)
+		})
+
+		function logHistory() {
+			console.log("i " + penTool.history.index, "len " + penTool.history.projects.length)
+		}
+
+		$(window).on("unload", function(event) {
+			localStorage.setItem("touchProto", JSON.stringify(project.exportJSON({ asString: true })))
+			localStorage.setItem("touchText", $("#textInputField").val())
+			localStorage.setItem("touchCommands", JSON.stringify(getCommands("#commands")))
+		})
+
+	
+  </script>
+  
+</body>
 </html>
