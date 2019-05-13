@@ -49,7 +49,7 @@
       document.getElementById('authlink').classList.add('logged')
     } else {
       var dbx = new Dropbox({ clientId: CLIENT_ID });
-      var authUrl = dbx.getAuthenticationUrl('https://eerojohannes.com/pengen/');
+      var authUrl = dbx.getAuthenticationUrl('https://eeropic.github.io/pen-gen/');
       document.getElementById('authlink').href = authUrl;
     }
     
