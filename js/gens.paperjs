@@ -1,0 +1,137 @@
+window.gens = {
+  distort: function() {
+    var tool = new Tool()
+
+    tool.on({
+      mousedown(e) {
+        this.path = new Path({
+          strokeColor: "#000",
+          strokeJoin: "round",
+          strokeCap: "round",
+          strokeWidth: 12,
+          guide: true,
+          data: { start: e.timeStamp }
+        })
+
+        //project.loadLayers()
+        console.log(this.path.data.start)
+      },
+      mousedrag(e) {
+        this.path.add(e.point)
+      },
+      mouseup(e) {
+        this.path.simplify()
+        this.path.subDivide()
+        this.path.savePath()
+        this.path.guide = false
+      }
+    })
+
+    let distortPath = new Path({
+      strokeColor: "blue",
+      segments: [[-200, -200], [200, 200], [400, 0], [200, -200], [-200, 200], [-400, 0]],
+      closed: true,
+      guide: true,
+      position: view.viewSize / 2
+    })
+
+    distortPath.smooth()
+
+    view.onFrame = function(event) {
+      globalCount = event.count
+      let times = event.time * 200
+      if (event.count % 5 == 0) {
+        let items = project.getItems({
+          class: "Path",
+          match: function(el) {
+            return el.guide == false
+          }
+        })
+        items.forEach(function(elem) {
+          elem.loadPath()
+          let startTime = elem.data.start || 0
+          let pos = ((times + (startTime % 1000)) % 1000) / 1000
+          elem.position = [elem.bounds.width / 2, 0]
+          distortAlongPath(distortPath, elem, pos)
+        })
+      }
+    }
+  },
+  bounce: function() {
+    project.loadPaths()
+    view.onFrame = function(e) {
+      if (e.count % 5 == 0) {
+        let items = project.getItems({
+          class: "Path",
+          match: function(el) {
+            return el.guide == false
+          }
+        })
+
+        items.forEach(function(elem) {
+          elem.loadPath()
+          elem.position.y += Math.sin(elem.index + e.count / 10) * 50
+          elem.rotation = Math.cos(elem.index + e.count / 10) * 10
+        })
+      }
+    }
+  },
+  zoom: function() {
+    var tool = new Tool()
+
+    tool.on({
+      mousedown(e) {
+        this.path = new Path({
+          strokeColor: "#000",
+          strokeJoin: "round",
+          strokeCap: "round",
+          strokeWidth: 12,
+          guide: true,
+          data: { start: e.timeStamp }
+        })
+
+        //project.loadLayers()
+        console.log(this.path.data.start)
+      },
+      mousedrag(e) {
+        this.path.add(e.point)
+      },
+      mouseup(e) {
+        this.path.simplify()
+        this.path.savePath()
+        this.path.guide = false
+      }
+    })
+    tool.activate()
+
+    project.loadPaths()
+    let items = project.getItems({
+      class: "Path",
+      match: function(el) {
+        return el.guide == false
+      }
+    })
+    items.forEach(function(elem) {
+      elem.data.scaleCount = 0
+    })
+
+    view.onFrame = function(e) {
+      if (e.count % 5 == 0) {
+        let items = project.getItems({
+          class: "Path",
+          match: function(el) {
+            return el.guide == false
+          }
+        })
+
+        items.forEach(function(elem) {
+          elem.loadPath()
+          if (!elem.data.scaleCount) elem.data.scaleCount = elem.index * 2
+          elem.data.scaleCount = elem.data.scaleCount > 80 + elem.index * 2 ? elem.index * 2 : elem.data.scaleCount + 1
+          elem.scale((Math.pow(elem.data.scaleCount, 2) + elem.index * 100) / 2000, view.center)
+          elem.wiggle()
+        })
+      }
+    }
+  }
+}

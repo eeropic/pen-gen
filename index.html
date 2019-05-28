@@ -24,6 +24,13 @@
       ></canvas>
       <div id="gui-top">
         <a href="" id="authlink" class="button">Login to Dropbox</a>
+        <select id="selectJson">
+          <option value="" disabled="" selected="">Select art</option>
+        </select>
+        <select id="selectScript">
+          <option value="" disabled="" selected="">Select gen</option>
+        </select>
+        <div id="save" class="fas fa-save block"></div>
         <div id="undo" class="fas fa-undo block"></div>
         <div id="redo" class="fas fa-redo block"></div>
         <div id="clear-canvas" class="fas fa-trash block"></div>
@@ -32,6 +39,8 @@
 
     <script>
       var dev = true
+
+
 
       var CLIENT_ID = "zur0pmjfpxq68d5"
 
@@ -56,15 +65,25 @@
         if (savedAuth == null) localStorage.setItem("pengen-dropbox-auth", window.location.href)
         else window.location.href = savedAuth
         var dbx = new Dropbox({ accessToken: getAccessTokenFromUrl() })
-        dbx
-          .filesListFolder({ path: "/pen-gen/" })
+
+          //list
+          dbx.filesListFolder({ path: "/pen-gen/" })
           .then(function(response) {
-            globaalit = response.entries
-            console.log(response.entries)
+          var names=[];
+            for(var i=0;i<response.entries.length;i++){
+            names.push(response.entries[i].name.slice(0,-5));
+            }
+
+          $.each(names, function(index, value) {
+            $('#selectJson').append($('<option></option>').val(value).html(value))
+          });
+            
+            
           })
           .catch(function(error) {
-            console.error(error)
-          })
+            console.log(error);
+          });  
+
         document.getElementById("authlink").innerHTML = "Logged in to Dropbox"
         document.getElementById("authlink").classList.add("logged")
       } else {
@@ -75,77 +94,212 @@
       }
     </script>
 
-    <script>
-      paper.install(window)
-      window.onload = function() {
-        jQuery.get(
-          "js/main.paperjs",
+<script>
+
+
+paper.install(window)
+window.onload = function() {
+  $.get("js/utils.paperjs",
+    function(data) {
+      paper.execute(data)
+        $.get("js/gens.paperjs?version=1",
+          function(data) {
+            paper.execute(data)
+            $.each(Object.keys(gens), function(index, value) {
+              $('#selectScript').append($('<option></option>').val(value).html(value))
+            });
+            //$("#selectScript").val('draw');
+          },"text")
+    },"text")
+
+  paper.setup("canvas")
+
+
+  var drawTool = new Tool()
+  drawTool.on({
+    mousedown(e) {
+      this.path = new Path({
+        strokeColor: "#000",
+        strokeJoin: "round",
+        strokeCap: "round",
+        strokeWidth: 12,
+        guide: true,
+        data: { start: e.timeStamp }
+      })
+    },
+    mousedrag(e) {
+      this.path.add(e.point)
+    },
+    mouseup(e) {
+      this.path.simplify()
+      this.path.savePath()
+      this.path.guide = false
+    }
+  })
+
+
+  Layer.prototype.loadData = function() {
+    if (this.data.original != null) {
+      this.importJSON(this.data.original)
+    } else console.log("No original layer data found")
+  }
+
+  Layer.prototype.saveData = function() {
+    this.data.original = this.exportJSON()
+  }
+
+  Project.prototype.loadLayers = function() {
+    this.layers.forEach(layer => {
+      if (layer.data != null) layer.loadData()
+    })
+  }
+
+  Project.prototype.saveLayers = function() {
+    this.layers.forEach(layer => {
+      layer.data.original = layer.exportJSON()
+    })
+  }
+
+  Project.prototype.loadPaths = function() {
+    let items = project.getItems({ class: "Path", guide:false })
+    items.forEach(function(elem) {
+      elem.pathData = elem.data.pathData 
+    })
+  }        
+
+  Project.prototype.savePaths = function() {
+    let items = project.getItems({ class: "Path", guide:false })
+    items.forEach(function(elem) {
+      elem.data.pathData = elem.pathData
+    })
+  }
+
+
+  Path.prototype.loadPath = function() {
+    this.pathData = this.data.pathData
+  }
+
+  Path.prototype.savePath = function() {
+    this.data.pathData = this.pathData
+  }
+
+  Item.prototype.subDivide = function() {
+    let len = this.segments.length
+    for (var i = len - 1; i >= 0; i--) {
+      this.segments[i].curve.divideAtTime(0.5)
+    }
+  }        
+
+  Path.prototype.wiggle = function(){
+    let len = this.segments.length
+    for (var i = 0; i < len; i++) {
+      this.segments[i].point=this.segments[i].point.add(new Point(Math.random()*3,Math.random()*4))
+    }
+  }
+
+
+  document.body.addEventListener("touchstart", null, { passive: false })
+  document.body.addEventListener("touchmove", null, { passive: false })
+  document.body.addEventListener("touchend", null, { passive: false })
+
+  $("#gui, #components, #commands, #colors").on("touchstart touchmove", function(e) {
+    e.preventDefault()
+  })
+
+  function updateUndoButtons(tool) {
+    $("#undo").css("opacity", tool.history.index > 0 && tool.history.projects.length > 0 ? 1 : 0.5)
+    $("#redo").css("opacity", tool.history.index < tool.history.projects.length - 1 ? 1 : 0.5)
+  }
+
+  function handleUndoHistory(tool) {
+    tool.history.projects.push(project.exportJSON(false))
+    tool.history.index = Math.min(tool.history.index + 1, tool.history.projects.length - 1)
+    if (tool.history.projects.length > 0 && tool.history.index < Math.max(0, tool.history.projects.length - 1)) {
+      tool.history.projects.length = Math.max(1, tool.history.index)
+      tool.history.projects.push(project.exportJSON(false))
+      tool.history.index = tool.history.projects.length - 1
+    } else if (tool.history.projects.length > tool.maxUndoLevels) {
+      tool.history.projects.shift()
+      tool.history.index = Math.max(0, tool.history.index - 1)
+    }
+  }
+
+  $("#clear-canvas").click(function() {
+    project.clear()
+    handleUndoHistory(penTool)
+    updateUndoButtons(penTool)
+  })
+
+  $("#undo").click(function() {
+    penTool.history.index = Math.max(0, penTool.history.index - 1)
+    project.clear()
+    project.importJSON(penTool.history.projects[penTool.history.index])
+    //logHistory()
+    updateUndoButtons(penTool)
+  })
+
+  $("#redo").click(function() {
+    penTool.history.index = Math.max(0, Math.min(penTool.history.projects.length - 1, penTool.history.index + 1))
+    project.clear()
+    project.importJSON(penTool.history.projects[penTool.history.index])
+    //logHistory()
+    updateUndoButtons(penTool)
+  })
+
+  $("#save").click(function() {
+    var data=project.exportJSON()
+    var filename = prompt("Enter filename", "");
+    dbx.filesUpload({path: '/pen-gen/'+filename+'.json', contents: data, mode:'overwrite'})
+      .then(function(response) {
+        console.log(response);
+      })
+      .catch(function(error) {
+        console.error(error);
+      });
+  })        
+
+  function logHistory() {
+    console.log("i " + penTool.history.index, "len " + penTool.history.projects.length)
+  }
+
+  $(window).on("unload", function(event) {
+    localStorage.setItem("touchProto", JSON.stringify(project.exportJSON({ asString: true })))
+    localStorage.setItem("touchText", $("#textInputField").val())
+    localStorage.setItem("touchCommands", JSON.stringify(getCommands("#commands")))
+  })
+
+
+  $("select#selectJson").change(function(){
+    var filename=$(this).children(":selected").html();
+    dbx.filesDownload({path: '/pen-gen/'+filename+'.json'}).then(function(response) {
+      var reader = new FileReader();
+      reader.onloadend = function () {
+          project.clear();
+          project.importJSON(reader.result)
+        }
+          reader.readAsBinaryString(response.fileBlob);  
+        })
+      })
+     
+
+  $("select#selectScript").change(function(){
+    var filename=$(this).children(":selected").html();
+    /*
+    jQuery.get(
+          "js/"+filename+".paperjs",
           function(data) {
             paper.execute(data)
           },
           "text"
-        )
+    )
+    */
+    gens[filename]()
+  })
 
-        // Setup directly from canvas id:
-        paper.setup("canvas")
-        document.body.addEventListener("touchstart", null, { passive: false })
-        document.body.addEventListener("touchmove", null, { passive: false })
-        document.body.addEventListener("touchend", null, { passive: false })
+}  
 
-        $("#gui, #components, #commands, #colors").on("touchstart touchmove", function(e) {
-          e.preventDefault()
-        })
 
-        function updateUndoButtons(tool) {
-          $("#undo").css("opacity", tool.history.index > 0 && tool.history.projects.length > 0 ? 1 : 0.5)
-          $("#redo").css("opacity", tool.history.index < tool.history.projects.length - 1 ? 1 : 0.5)
-        }
-
-        function handleUndoHistory(tool) {
-          tool.history.projects.push(project.exportJSON(false))
-          tool.history.index = Math.min(tool.history.index + 1, tool.history.projects.length - 1)
-          if (tool.history.projects.length > 0 && tool.history.index < Math.max(0, tool.history.projects.length - 1)) {
-            tool.history.projects.length = Math.max(1, tool.history.index)
-            tool.history.projects.push(project.exportJSON(false))
-            tool.history.index = tool.history.projects.length - 1
-          } else if (tool.history.projects.length > tool.maxUndoLevels) {
-            tool.history.projects.shift()
-            tool.history.index = Math.max(0, tool.history.index - 1)
-          }
-        }
-
-        $("#clear-canvas").click(function() {
-          project.clear()
-          handleUndoHistory(penTool)
-          updateUndoButtons(penTool)
-        })
-
-        $("#undo").click(function() {
-          penTool.history.index = Math.max(0, penTool.history.index - 1)
-          project.clear()
-          project.importJSON(penTool.history.projects[penTool.history.index])
-          //logHistory()
-          updateUndoButtons(penTool)
-        })
-
-        $("#redo").click(function() {
-          penTool.history.index = Math.max(0, Math.min(penTool.history.projects.length - 1, penTool.history.index + 1))
-          project.clear()
-          project.importJSON(penTool.history.projects[penTool.history.index])
-          //logHistory()
-          updateUndoButtons(penTool)
-        })
-
-        function logHistory() {
-          console.log("i " + penTool.history.index, "len " + penTool.history.projects.length)
-        }
-
-        $(window).on("unload", function(event) {
-          localStorage.setItem("touchProto", JSON.stringify(project.exportJSON({ asString: true })))
-          localStorage.setItem("touchText", $("#textInputField").val())
-          localStorage.setItem("touchCommands", JSON.stringify(getCommands("#commands")))
-        })
-      }
+  
     </script>
   </body>
 </html>

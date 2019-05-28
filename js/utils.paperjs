@@ -1,0 +1,19 @@
+window.distortAlongPath = function(distortPath, sourcePath, offset) {
+  let cloneWidth = sourcePath.bounds.width
+  for (let seg of sourcePath.segments) {
+    let normalizedX = seg.point.x / cloneWidth
+    let normalizedInX = (seg.handleIn.x + seg.point.x) / cloneWidth
+    let normalizedOutX = (seg.handleOut.x + seg.point.x) / cloneWidth
+    let normX = (normalizedX * cloneWidth + offset * distortPath.length) % distortPath.length
+    let normInX = (normalizedInX * cloneWidth + offset * distortPath.length) % distortPath.length
+    let normOutX = (normalizedOutX * cloneWidth + offset * distortPath.length) % distortPath.length
+    let normalAtPos = distortPath.getNormalAt(normX)
+    let normalInAtPos = distortPath.getNormalAt(normInX)
+    let normalOutAtPos = distortPath.getNormalAt(normOutX)
+    let inY = seg.handleIn.y + seg.point.y
+    let outY = seg.handleOut.y + seg.point.y
+    seg.point = distortPath.getPointAt(normX) + normalAtPos * -seg.point.y
+    seg.handleIn = distortPath.getPointAt(normInX) + normalInAtPos * -inY - seg.point
+    seg.handleOut = distortPath.getPointAt(normOutX) + normalOutAtPos * -outY - seg.point
+  }
+}
